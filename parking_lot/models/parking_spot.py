@@ -1,55 +1,48 @@
-"""
-models/parking_spot.py
-----------------------
-Represents a single physical parking spot.
+import threading
+from enum import Enum
+from models.vehicle import Vehicle, VehicleType
 
-Key Design Decision — Query/Command Separation:
-- can_fit_vehicle() is a QUERY  → reads state, never changes it
-- assign_vehicle() is a COMMAND → changes state only after confirming fit
-- This prevents a vehicle from accidentally occupying a spot during a search loop
-  (the loop calls can_fit_vehicle repeatedly; only the winner calls assign_vehicle).
-"""
-
-from __future__ import annotations
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.vehicle import Vehicle
-
+class SpotType(Enum):
+    SMALL = 'SMALL'
+    MEDIUM = 'MEDIUM'
+    LARGE = 'LARGE'
 
 class ParkingSpot:
-    """
-    Represents a single physical spot on a level.
-
-    Attributes:
-        spot_id   : Unique identifier, e.g. 'A1', 'B3'.
-        spot_type : Size category ('Small', 'Medium', 'Large').
-        is_occupied : True when a vehicle is currently parked here.
-    """
-
-    def __init__(self, spot_id: str, spot_type: str):
+    def __init__(self, spot_id: int, spot_type: SpotType):
         self.spot_id = spot_id
         self.spot_type = spot_type
         self.is_occupied = False
+        self.current_vehicle = None
+        self._lock = threading.Lock()
 
-    def can_fit_vehicle(self, vehicle: "Vehicle") -> bool:
-        """
-        QUERY — does not modify state.
-        Returns True only when the spot type matches the vehicle size
-        AND the spot is currently free.
-        """
-        return self.spot_type == vehicle.get_size() and not self.is_occupied
+    def can_fit_vehicle(self, vehicle: Vehicle) -> bool:
+        if self.spot_type == SpotType.SMALL:
+            return vehicle.vehicle_type == VehicleType.BIKE
 
-    def assign_vehicle(self, vehicle: "Vehicle") -> bool:
-        """
-        COMMAND — marks spot as occupied if the vehicle fits.
-        Returns True on success, False if the spot is incompatible or taken.
-        """
-        if self.can_fit_vehicle(vehicle):
-            self.is_occupied = True
+        elif self.spot_type == SpotType.MEDIUM:
+            return vehicle.vehicle_type in [VehicleType.BIKE, VehicleType.CAR]
+
+        elif self.spot_type == SpotType.LARGE:
             return True
+
         return False
 
+    def is_available(self) -> bool:
+        with self._lock:
+            return not self.is_occupied
+
+    def assign_vehicle(self, vehicle: Vehicle):
+        with self._lock:
+            if self.is_occupied:
+                return False
+            if not self.can_fit_vehicle(vehicle):
+                return False
+
+            self.is_occupied = True
+            self.current_vehicle = vehicle
+            return True
+
     def remove_vehicle(self):
-        """Frees the spot when a vehicle exits."""
-        self.is_occupied = False
+        with self._lock:
+            self.current_vehicle = None
+            self.is_occupied = False

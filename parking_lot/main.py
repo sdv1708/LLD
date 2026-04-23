@@ -1,73 +1,42 @@
-"""
-main.py
--------
-Entry point for the Parking Lot demo.
-
-Run with:
-    python main.py          (from inside the parking_lot/ directory)
-    python -m parking_lot   (if parking_lot is treated as a package)
-"""
-
-from models import Car, Motorcycle, Truck
-from models import ParkingSpot
-from models import Ticket
-from services import Level, PricingContext, WeekdayStrategy, WeekendStrategy, ParkingLot
-
+from models import Vehicle, VehicleType, ParkingSpot, SpotType
+from services import ParkingFloor, HourlyPricingStrategy, ParkingLot
 
 def main():
-    # ----------------------------------------------------------------
-    # 1. Build the lot: 1 level, 3 spots of different sizes
-    # ----------------------------------------------------------------
     spots = [
-        ParkingSpot("S1", "Small"),
-        ParkingSpot("M1", "Medium"),
-        ParkingSpot("L1", "Large"),
+        ParkingSpot(1, SpotType.SMALL),
+        ParkingSpot(2, SpotType.MEDIUM),
+        ParkingSpot(3, SpotType.LARGE),
     ]
-    level1 = Level("Ground", spots)
+    floor1 = ParkingFloor(1, spots)
 
-    pricing = PricingContext(WeekdayStrategy(base_rate=5.0, hourly_rate=2.5))
-    lot = ParkingLot(levels=[level1], pricing_context=pricing)
+    pricing = HourlyPricingStrategy(rate_per_hour=2.5)
+    lot = ParkingLot(floors=[floor1], pricing_strategy=pricing)
 
-    # ----------------------------------------------------------------
-    # 2. Singleton check — both references point to the same object
-    # ----------------------------------------------------------------
-    lot2 = ParkingLot(levels=[level1], pricing_context=pricing)
-    print(f"Same instance: {lot is lot2}")   # Expected: True
+    car = Vehicle(101, VehicleType.CAR)
+    bike = Vehicle(102, VehicleType.BIKE)
+    truck = Vehicle(103, VehicleType.TRUCK)
 
-    # ----------------------------------------------------------------
-    # 3. Vehicle entry — fill all three spots
-    # ----------------------------------------------------------------
-    car   = Car("KA-01-1234")
-    bike  = Motorcycle("MH-02-5678")
-    truck = Truck("DL-03-9999")
+    ticket1 = lot.park_vehicle(car)
+    print(f"Parked car at spot {ticket1.spot.spot_id if ticket1 else 'N/A'}")
 
-    ticket  = lot.entry(car)    # → M1
-    ticket2 = lot.entry(bike)   # → S1
-    lot.entry(truck)            # → L1   (no ticket needed for demo)
+    ticket2 = lot.park_vehicle(bike)
+    print(f"Parked bike at spot {ticket2.spot.spot_id if ticket2 else 'N/A'}")
 
-    # ----------------------------------------------------------------
-    # 4. Overflow test — lot is completely full
-    # ----------------------------------------------------------------
-    extra_car = Car("TN-04-1111")
-    result = lot.entry(extra_car)   # No Medium spot available
-    print(result)                   # Expected: "Parking Full!"
+    ticket3 = lot.park_vehicle(truck)
+    print(f"Parked truck at spot {ticket3.spot.spot_id if ticket3 else 'N/A'}")
 
-    # ----------------------------------------------------------------
-    # 5. Switch pricing strategy mid-operation (Strategy pattern demo)
-    # ----------------------------------------------------------------
-    pricing.set_strategy(WeekendStrategy(flat_rate=10.0))
+    extra_car = Vehicle(104, VehicleType.CAR)
+    result_ticket = lot.park_vehicle(extra_car)
+    if not result_ticket:
+        print("Parking Full!")
 
-    # ----------------------------------------------------------------
-    # 6. Vehicle exit — spot freed, fee calculated
-    # ----------------------------------------------------------------
-    if isinstance(ticket, Ticket):
-        charge = lot.exit(ticket)
-        print(f"Car charge:  ${charge:.2f}")
+    if ticket1:
+        charge1 = lot.unpark_vehicle(ticket1)
+        print(f"Car charge: ${charge1:.2f}")
 
-    if isinstance(ticket2, Ticket):
-        charge2 = lot.exit(ticket2)
+    if ticket2:
+        charge2 = lot.unpark_vehicle(ticket2)
         print(f"Bike charge: ${charge2:.2f}")
-
 
 if __name__ == "__main__":
     main()
